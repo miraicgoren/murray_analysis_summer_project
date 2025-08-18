@@ -1,4 +1,4 @@
 ***2) Cross-sections***
 
 **semi_auto_cross_section_full.py:**
-Semi-automates Slicer’s CrossSectionAnalysis for each case/side/curve {0,1,2}. For every model, it loads the surface and the corresponding centerline/curve markup, preps the module UI, and lets you click Apply (keeps you in control of parameters). It then saves cross_section_<case>_<side>_curve{idx}.csv capturing area and coordinates at regular steps along the path. The script expects consistent file names for markups (e.g., curve indices 0/1/2) and surfaces; if something is missing, that curve is skipped and noted in the console. Use this to produce all raw cross-section CSVs that downstream steps consume.
+Automates running Slicer’s CrossSectionAnalysis for every case, side, and curve (0 = ICA parent, 1 and 2 = daughters). For each curve it loads the surface and the matching markup file, sets up the module, and you click “Apply” to generate a table of cross-sections along the path. It then saves a CSV named like cross_section_<case>_<side>_curve{idx}.csv. It expects consistent file naming for curves and surfaces; if a needed file is missing, it skips that curve and moves on.
