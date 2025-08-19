@@ -48,7 +48,6 @@ This folder holds the imaging data and derived files used by the ICA bifurcation
   - `bifurcation_masks/` – left/right ICA bifurcation **binary masks**.
   - `bifurcation_masks/vtk_surfaces/` – exported **surface meshes** (`.vtk`) used by Slicer/VMTK.
   - `centerlines/` – centerline models and markup files (`curve_<case>_<side> (0|1|2).mrk.json`) where:
-    - `curve0` = ICA parent, `curve1`/`curve2` = daughter branches.
   - Cross-section CSVs – outputs from Slicer CrossSectionAnalysis: `cross_section_<case>_<side>_curve{0,1,2}.csv`.
 
 ### Naming
@@ -57,11 +56,4 @@ This folder holds the imaging data and derived files used by the ICA bifurcation
 - **Curves**: `curve0` (ICA), `curve1`/`curve2` (daughters)
 - **Cross-section data**: `cross_section_<case>_<side>_curve{idx}.csv`
 - **Model ID** downstream: `<case>_<side>` (`mr_042_L`)
-
-## How it’s used in the pipeline
-
-1. Masks in `cow_seg_labelsTr/bifurcation_masks/` are converted to **VTK surfaces**.
-2. Surfaces + curve markups drive CrossSectionAnalysis → **cross_section_*.csv**.
-3. Cross-section CSVs feed diameter extraction → **diam_summary_full.csv**.
-4. The summary feeds Murray analysis → **murray_output_results.csv**.
 
