@@ -53,10 +53,10 @@ This folder holds the imaging data and derived files used by the ICA bifurcation
 
 ### Naming
 
-- **Cases**: `ct_###` or `mr_###`; **Sides**: `L`, `R`.  
-- **Curves**: `curve0` (ICA), `curve1`/`curve2` (daughters).  
-- **Cross-sections**: `cross_section_<case>_<side>_curve{idx}.csv`.  
-- **Model ID** downstream: `<case>_<side>` (e.g., `mr_042_L`).
+- **Cases**: `ct_###` or `mr_###`; **Sides**: `L`, `R`
+- **Curves**: `curve0` (ICA), `curve1`/`curve2` (daughters)
+- **Cross-section data**: `cross_section_<case>_<side>_curve{idx}.csv`
+- **Model ID** downstream: `<case>_<side>` (`mr_042_L`)
 
 ## How it’s used in the pipeline
 
