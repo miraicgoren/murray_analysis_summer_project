@@ -12,3 +12,6 @@ Final results table for Murray’s law. For each model it includes the ICA, MCA,
 
 **skipped_models.csv:**
 Short CSV lists any models that the Murray step had to skip, usually because the radii were missing, zero, or NaN. There are some missing curves / sides, so most probably won't be empty.
+
+**murray_final_stats_analysis:**
+R Markdown script analyzes Murray’s Law results for the ICA bifurcations. It reads murray_output_results.csv (radii for ICA/ACA/MCA, Murray deviation %, and two k estimates), cleans the data (drops missing/invalid rows, prefers k_root when available, otherwise uses k_minimize), and produces visualizations (histograms of deviation and k, scatter of k vs. deviation with a smooth trend). It tests whether modality (CT vs. MR) and side (L vs. R) affect deviation and k using two-way ANOVA. Uses a linear mixed effects models to include a random intercept for Patient_ID (parsed from Model_ID). Calculates  ICC to show inter-subject vs intra-patient variance.
