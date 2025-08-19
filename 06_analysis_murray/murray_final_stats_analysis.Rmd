@@ -1,0 +1,545 @@
+---
+title: "Murray Results: Modality & Side Effects (ANOVA, LME, ICC)"
+output: html_document
+date: "2025-07-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+setwd("/Users/miraicgoren/Desktop/TopCoW2024_Data_Release")
+dff <- read_csv("murray_output_results.csv")
+dff
+
+df_cleaned <- dff %>%
+  mutate(
+    Murray_Exponent_k_root = ifelse(is.na(Murray_Exponent_k_root), 0, Murray_Exponent_k_root),
+    Murray_Exponent_k_minimize = ifelse(Murray_Exponent_k_minimize < 0.55, 0, Murray_Exponent_k_minimize)
+  )
+df_cleaned
+
+```
+```{r}
+### Relationship between Murray Deviation and Murray Exponent k
+
+ggplot(df_cleaned, aes(x = Murray_Exponent_k_minimize, y = Murray_Deviation_Percent)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  geom_vline(xintercept = 3, linetype = "dashed", color = "red", size = 0.5) +
+  theme_minimal() +
+  labs(
+    title = "Relationship Between Murray Exponent k and Deviation (%)",
+    x = "Murray Exponent (k) -- minimize",
+    y = "Deviation from Murray's Law (%)"
+  )
+  
+ggplot(df_cleaned, aes(x = Murray_Exponent_k_root, y = Murray_Deviation_Percent)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  geom_vline(xintercept = 3, linetype = "dashed", color = "red", size = 0.5) +
+  theme_minimal() +
+  labs(
+    title = "Relationship Between Murray Exponent k and Deviation (%)",
+    x = "Murray Exponent (k) -- root",
+    y = "Deviation from Murray's Law (%)"
+  )
+
+```
+```{r}
+summary_table <- df_cleaned %>%
+  summarise(
+    Total = n(),
+    Minimize_k_failures = sum(Murray_Exponent_k_minimize == 0),
+    Root_k_failures = sum(Murray_Exponent_k_root == 0),
+    Disagreeing_k_values = sum(round(Murray_Exponent_k_minimize, 2) != round(Murray_Exponent_k_root, 2))
+  )
+
+print(summary_table)
+```
+```{r}
+df_cleaned %>% filter(round(Murray_Exponent_k_minimize, 2) != round(Murray_Exponent_k_root, 2)) %>% select(-ICA_CE_Radius, -MCA_CE_Radius, -ACA_CE_Radius)
+```
+Conclusion: use root method. 
+
+```{r}
+df_for_k <- df_cleaned %>% select(-Murray_Exponent_k_minimize) %>% filter(Murray_Exponent_k_root != 0)
+df_for_deviation <- df_cleaned %>% select(-Murray_Exponent_k_minimize, -Murray_Exponent_k_root) 
+df_for_k
+df_for_deviation
+```
+```{r}
+ggplot(df_for_k, aes(x = Murray_Exponent_k_root, y = Murray_Deviation_Percent)) +
+  geom_point(alpha = 0.6) +
+  # geom_smooth(method = "lm", se = TRUE, color = "darkgreen", size = 0.5) +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE, color = "blue", size = 0.5) +
+  geom_vline(xintercept = 3, linetype = "dashed", color = "red", size = 0.5) +
+  theme_minimal() +
+  labs(
+    title = "Relationship Between Murray Exponent k and Deviation (%)",
+    x = "Murray Exponent (k) -- root",
+    y = "Deviation from Murray's Law (%)"
+  )
+
+ggplot(df_for_k, aes(x = Murray_Exponent_k_root, y = Murray_Deviation_Percent, color = Modality)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE, color = "darkblue", size = 0.6) +
+  geom_vline(xintercept = 3, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(
+    title = "Relationship Between Murray Exponent k and Deviation (%) by Modality",
+    x = "Murray Exponent (k)",
+    y = "Deviation from Murray's Law (%)"
+  )
+
+```
+```{r}
+# Fit the quadratic model
+quad_model <- lm(Murray_Deviation_Percent ~ poly(Murray_Exponent_k_root, 2, raw = TRUE), data = df_for_k)
+
+# Get coefficients
+coefs <- coef(quad_model)
+a <- coefs[3]
+b <- coefs[2]
+k_opt <- -b / (2 * a)
+
+cat("Estimated k where deviation is minimized:", round(k_opt, 3), "\n")
+```
+
+```{r}
+# Fit both models
+lin_model <- lm(Murray_Deviation_Percent ~ Murray_Exponent_k_root, data = df_for_k)
+quad_model <- lm(Murray_Deviation_Percent ~ poly(Murray_Exponent_k_root, 2, raw = TRUE), data = df_for_k)
+
+# Create residual data frame
+df_resid <- data.frame(
+  k = df_for_k$Murray_Exponent_k_root,
+  lin_resid = resid(lin_model),
+  quad_resid = resid(quad_model)
+)
+
+# Plot residuals
+library(tidyr)
+df_resid_long <- df_resid %>%
+  pivot_longer(cols = c(lin_resid, quad_resid), names_to = "Model", values_to = "Residual")
+
+ggplot(df_resid_long, aes(x = k, y = Residual, color = Model)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+  geom_point(alpha = 0.5) +
+  geom_smooth(se = FALSE) +
+  theme_minimal() +
+  labs(
+    title = "Residuals from Linear vs Quadratic Fit",
+    x = "Murray Exponent (k)",
+    y = "Residual"
+  )
+```
+
+
+
+
+*EDA*
+```{r}
+# Plot: Murray_Deviation_Percent
+df_for_deviation %>% filter(Murray_Deviation_Percent > -200) %>% 
+  ggplot(aes(x = Modality, y = Murray_Deviation_Percent, fill = Side)) +
+  geom_boxplot() +
+  theme_minimal() + 
+  theme(panel.grid = element_blank(),
+        axis.line = element_line(color = "black", linewidth = 0.5),
+        axis.ticks = element_line(color = "black"))
+
+# Plot: Murray_Exponent_k
+ggplot(df_for_k, aes(x = Modality, y = Murray_Exponent_k_root, fill = Side)) +
+  geom_boxplot() +
+  theme_minimal() + 
+  theme(panel.grid = element_blank(),
+        axis.line = element_line(color = "black", linewidth = 0.5),
+        axis.ticks = element_line(color = "black"))+ 
+  coord_fixed(ratio = 0.3)  # compresses width
+```
+
+*RUNNING ANOVA*
+
+```{r}
+# 1. ANOVA for Murray_Deviation_Percent with df_for_deviation
+
+# Prep dataframe df_for_deviation
+df_for_deviation <- df_for_deviation %>%
+  mutate(
+    Modality = factor(toupper(substr(Model_ID, 1, 2))),
+    Side = factor(toupper(substr(Model_ID, nchar(Model_ID), nchar(Model_ID))))
+  )
+
+#Run 2-way ANOVA on Murray_Deviation_Percent (including models with no valid root)
+anova_dev <- aov(Murray_Deviation_Percent ~ Modality * Side, data = df_for_deviation)
+cat("\n=== 2-Way ANOVA on Murray Deviation (%) ===\n")
+summary(anova_dev)
+
+```
+
+```{r}
+# 2. ANOVA for Murray_Exponent_k_root with df_for_k
+
+# Prep dataframe df_for_k
+df_for_k <- df_for_k %>%
+  mutate(
+    Modality = factor(toupper(substr(Model_ID, 1, 2))),  # CT or MR
+    Side = factor(toupper(substr(Model_ID, nchar(Model_ID), nchar(Model_ID))))  # L or R
+  )
+
+# Run 2-way ANOVA on Murray_Exponent_k_root (only valid roots)
+anova_k <- aov(Murray_Exponent_k_root ~ Modality * Side, data = df_for_k)
+cat("\n=== 2-Way ANOVA on Murray Exponent k ===\n")
+summary(anova_k)
+
+```
+```{r}
+# Tukey post-hoc tests
+TukeyHSD(anova_dev, which = "Modality")
+TukeyHSD(anova_k, which = "Modality")
+
+```
+```{r}
+# install.packages("emmeans")
+library(ggplot2)
+library(emmeans)
+
+
+# ANOVA and marginal means
+# emmeans --> ensures that we compare CT vs MR at an average, accounting for Side. produces marginal means. in raw means, even if there's a slight interaction, the marginal effect of Modality changes depending on Side. 
+anova_dev <- aov(Murray_Deviation_Percent ~ Modality * Side, data = df_for_deviation)
+emm_dev <- emmeans(anova_dev, ~ Modality) 
+emm_df_dev <- as.data.frame(emm_dev)
+
+# Plot
+ggplot() +
+  # Boxplot and raw data
+  geom_boxplot(data = df_for_deviation, aes(x = Modality, y = Murray_Deviation_Percent, fill = Modality), alpha = 0.4) +
+  geom_jitter(data = df_for_deviation, aes(x = Modality, y = Murray_Deviation_Percent), width = 0.15, alpha = 0.2) +
+  
+  # Estimated means and CIs
+  geom_errorbar(data = emm_df_dev, aes(x = Modality, ymin = lower.CL, ymax = upper.CL), width = 0.2, color = "black") +
+  geom_point(data = emm_df_dev, aes(x = Modality, y = emmean), size = 3, color = "black") +
+
+  # Labels and theme
+  theme_minimal() +
+  labs(title = "Murray Deviation (%) by Modality",
+       y = "Deviation from Murray's Law (%)",
+       x = "Modality") +
+  theme(legend.position = "none")
+
+```
+```{r}
+
+# Ensure Patient_ID is extracted and treated as a factor
+df_for_deviation_filtered$Patient_ID <- substr(df_for_deviation_filtered$Model_ID, 4, 6)
+df_for_deviation_filtered$Patient_ID <- factor(df_for_deviation_filtered$Patient_ID)
+
+df_for_k_filtered$Patient_ID <- substr(df_for_k_filtered$Model_ID, 4, 6)
+df_for_k_filtered$Patient_ID <- factor(df_for_k_filtered$Patient_ID)
+
+# Run ANOVA on the filtered deviation dataset
+anova_dev_patient_filtered <- aov(Murray_Deviation_Percent ~ Modality * Side + Patient_ID, data = df_for_deviation_filtered)
+cat("-----ANOVA on Deviation (Filtered) ------\n")
+summary(anova_dev_patient_filtered)
+
+# Run ANOVA on the filtered k dataset
+anova_k_patient_filtered <- aov(Murray_Exponent_k_root ~ Modality * Side + Patient_ID, data = df_for_k_filtered)
+cat("-----ANOVA on Exponent k (Filtered) ------\n")
+summary(anova_k_patient_filtered)
+
+```
+
+
+
+```{r}
+# Filtering to patients with both L and R sides
+
+library(dplyr)
+
+# Extract patient ID, modality, and side
+df_for_deviation <- df_for_deviation %>%
+  mutate(
+    Patient_ID = substr(Model_ID, 4, 6),
+    Modality = factor(toupper(substr(Model_ID, 1, 2))),
+    Side = factor(toupper(substr(Model_ID, nchar(Model_ID), nchar(Model_ID))))
+  )
+
+# Identify (Patient_ID + Modality) combos that have both L and R
+valid_combos <- df_for_deviation %>%
+  group_by(Patient_ID, Modality) %>%
+  summarise(n_sides = n_distinct(Side), .groups = "drop") %>%
+  filter(n_sides == 2)
+
+# Keep only entries that belong to those valid combinations
+df_for_deviation_filtered <- df_for_deviation %>%
+  semi_join(valid_combos, by = c("Patient_ID", "Modality"))
+
+# Run ANOVA
+anova_dev_filtered <- aov(Murray_Deviation_Percent ~ Modality * Side, data = df_for_deviation_filtered)
+cat("=======ANOVA for deviation, filtered dataframe========\n")
+summary(anova_dev_filtered)
+
+anova_k_filtered <- aov(Murray_Deviation_Percent ~ Modality * Side, data = df_for_k_filtered)
+cat("=======ANOVA for exponent k, filtered dataframe========\n")
+summary(anova_k_filtered)
+```
+"Results were robust when limiting the analysis to patients with bilateral ICA bifurcations (n = ...), confirming that the significant modality effect is not driven by sampling asymmetry."
+
+
+```{r}
+AIC(anova_dev)
+AIC(anova_dev_filtered)
+# Lower AIC → better fit
+```
+
+```{r}
+# Creating df_for_k_filtered
+library(dplyr)
+
+# Extract Patient_ID, Modality, and Side from Model_ID in df_for_k
+df_for_k <- df_for_k %>%
+  mutate(
+    Patient_ID = substr(Model_ID, 4, 6),
+    Modality = factor(toupper(substr(Model_ID, 1, 2))),
+    Side = factor(toupper(substr(Model_ID, nchar(Model_ID), nchar(Model_ID))))
+  )
+
+# Identify valid (Patient_ID, Modality) pairs with both sides
+valid_combos_k <- df_for_k %>%
+  group_by(Patient_ID, Modality) %>%
+  summarise(n_sides = n_distinct(Side), .groups = "drop") %>%
+  filter(n_sides == 2)
+
+# Filter df_for_k to keep only complete left-right pairs
+df_for_k_filtered <- df_for_k %>%
+  semi_join(valid_combos_k, by = c("Patient_ID", "Modality"))
+
+df_for_k_filtered
+```
+
+
+
+```{r}
+library(Matrix)
+library(lme4)
+
+# Mixed-effects model
+lmer_dev_filtered <- lmer(Murray_Deviation_Percent ~ Modality + Side + (1 | Patient_ID), data = df_for_deviation_filtered)
+summary(lmer_dev_filtered)
+
+```
+
+```{r}
+
+library(performance)
+
+# Compute ICC
+icc_result <- performance::icc(lmer_dev_filtered)
+
+# Print result
+print(icc_result)
+
+```
+
+```{r}
+# LME wih df_for_k_filtered
+# Run linear mixed-effects model on filtered k dataset
+lmer_k_filtered <- lmer(Murray_Exponent_k_root ~ Modality + Side + (1 | Patient_ID), data = df_for_k_filtered)
+
+# View summary
+summary(lmer_k_filtered)
+```
+```{r}
+ggplot(df_for_deviation, aes(x = Murray_Deviation_Percent)) +
+  geom_histogram(fill = "skyblue", bins = 30, color = "black",alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Distribution of Murray's Deviation (%)",
+       x = "Deviation (%)", y = "Frequency")
+ggplot(df_for_k, aes(x = Murray_Exponent_k_root)) +
+  geom_histogram(fill = "orange", bins = 30, color = "black", alpha = 0.7) +
+  geom_vline(xintercept = 3, linetype = "dashed", color = "red", size = 0.6) +
+  theme_minimal() +
+  labs(
+    title = "Histogram of Estimated Murray Exponent (k)",
+    x = "Murray Exponent (k)",
+    y = "Count"
+  )
+
+
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+
+df_for_deviation_filtered <- df_for_deviation_filtered %>%
+  mutate(is_outlier = Murray_Deviation_Percent < -100)
+
+
+ggplot(df_for_deviation_filtered, aes(x = Side, y = Murray_Deviation_Percent, group = Patient_ID)) +
+  geom_line(alpha = 0.3, color = "darkblue") +  # fixed line color
+  geom_point(aes(color = is_outlier), size = 1.5) +  # point color mapped by outlier
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.5) +  # horizontal line at y = 0
+  facet_wrap(~ Modality) +
+  scale_color_manual(values = c("FALSE" = "darkblue", "TRUE" = "red")) +
+  theme_minimal() +
+  labs(
+    title = "Within-Patient Left vs Right Deviation",
+    y = "Murray's Deviation (%)",
+    color = "Outlier (< -100%)"
+  ) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  ) +  # compresses width
+  coord_fixed(ratio = 0.007) + 
+  scale_y_continuous(
+    limits = c(-500, 100),          # full range
+    expand = expansion(mult = c(0.01, 0.01))  # compress top/bottom padding
+  ) 
+
+  
+
+
+
+```
+```{r}
+ranef_data <- ranef(lmer_dev_filtered)$Patient_ID
+ranef_data$Patient_ID <- rownames(ranef_data)
+
+ggplot(ranef_data, aes(x = reorder(Patient_ID, `(Intercept)`), y = `(Intercept)`)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Random Intercepts by Patient ID",
+       y = "Patient-Level Deviation Shift")
+
+```
+
+```{r}
+# Create a summary table of counts by Modality and Side
+table_sample_sizes <- df_for_deviation_filtered %>%
+  count(Modality, Side) %>%
+  tidyr::pivot_wider(names_from = Side, values_from = n, values_fill = 0) %>%
+  rename(`Modality` = Modality, `Left (L)` = L, `Right (R)` = R)
+
+print(table_sample_sizes)
+```
+
+
+```{r}
+# Total models before filtering
+total_models_before <- nrow(df_for_deviation)
+
+# Total models after filtering
+total_models_after <- nrow(df_for_deviation_filtered)
+
+# Number excluded
+excluded_models <- total_models_before - total_models_after
+
+# Summary table
+filter_summary <- tibble(
+  `Total models before filtering` = total_models_before,
+  `Models retained after filtering` = total_models_after,
+  `Models excluded` = excluded_models
+)
+
+print(filter_summary)
+
+```
+
+```{r}
+library(dplyr)
+
+# Total models before filtering
+total_deviation_models <- nrow(df_for_deviation)
+total_k_models <- nrow(df_for_k)
+
+# Models with both L and R per (Patient_ID, Modality)
+valid_combos <- df_for_deviation %>%
+  group_by(Patient_ID, Modality) %>%
+  summarise(n_sides = n_distinct(Side), .groups = "drop") %>%
+  filter(n_sides == 2)
+
+df_side_filtered <- df_for_deviation %>%
+  semi_join(valid_combos, by = c("Patient_ID", "Modality"))
+
+# Models removed for missing L or R
+missing_sides_excluded <- total_deviation_models - nrow(df_side_filtered)
+
+# Models remaining after final k filtering
+final_k_filtered <- nrow(df_for_k_filtered)
+
+# Models removed for missing k
+missing_k_excluded <- nrow(df_side_filtered) - final_k_filtered
+
+# Combined summary
+filter_summary <- tibble(
+  `Total models before filtering` = total_deviation_models,
+  `Excluded due to missing L/R side` = missing_sides_excluded,
+  `Excluded due to missing Murray exponent (k)` = missing_k_excluded,
+  `Final models included in analysis` = final_k_filtered
+)
+
+print(filter_summary)
+
+```
+
+```{r}
+library(dplyr)
+
+# Group by Modality and calculate mean deviation
+df_for_deviation_filtered %>%
+  group_by(Modality) %>%
+  summarise(
+    Mean_Deviation = round(mean(Murray_Deviation_Percent, na.rm = TRUE), 1),
+    SD_Deviation = round(sd(Murray_Deviation_Percent, na.rm = TRUE), 1),
+    N = n()
+  )
+
+df_for_deviation %>%
+  group_by(Modality) %>%
+  summarise(
+    Mean_Deviation = round(mean(Murray_Deviation_Percent, na.rm = TRUE), 1),
+    SD_Deviation = round(sd(Murray_Deviation_Percent, na.rm = TRUE), 1),
+    N = n()
+  )
+
+```
+```{r}
+df_for_deviation_filtered %>%
+  group_by(Modality) %>%
+  summarise(mean = mean(Murray_Deviation_Percent), sd = sd(Murray_Deviation_Percent),
+            N = n())
+
+```
+```{r}
+library(dplyr)
+
+df_for_k_filtered %>%
+  group_by(Modality) %>%
+  summarise(
+    Mean_k = mean(Murray_Exponent_k_root, na.rm = TRUE),
+    SD_k = sd(Murray_Exponent_k_root, na.rm = TRUE),
+    N = n()
+  )
+
+
+```
+```{r}
+icc_table <- tibble::tibble(
+  Metric = c("Murray's Deviation (%)", "Murray's Exponent (k)"),
+  ICC = c(0.13, 0.22),
+  Interpretation = c("Low–moderate inter-individual variance", "Moderate inter-individual variance")
+)
+
+print(icc_table)
+
+```
+
+
